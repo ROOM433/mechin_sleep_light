@@ -91,6 +91,45 @@
                 </div>
             </div>
 
+            <!-- 조명 제어 -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-lightbulb"></i> 조명 제어 (디밍/선라이즈)</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-center g-3">
+                                <div class="col-md-6">
+                                    <label for="brightnessRange" class="form-label">밝기: <span id="brightnessValue">0%</span></label>
+                                    <input type="range" class="form-range" id="brightnessRange" min="0" max="100" value="0">
+                                </div>
+                                <div class="col-md-6 d-flex align-items-end justify-content-md-end">
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-primary" id="sunriseStartBtn" disabled>
+                                            <i class="fas fa-sun"></i> 선라이즈 시작
+                                        </button>
+                                        <button class="btn btn-outline-secondary" id="sunriseCancelBtn" disabled>
+                                            <i class="fas fa-ban"></i> 선라이즈 취소
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <label for="sunriseDuration" class="form-label">선라이즈 시간(분)</label>
+                                    <input type="number" class="form-control" id="sunriseDuration" min="5" max="60" value="20">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="sunriseTarget" class="form-label">목표 밝기(%)</label>
+                                    <input type="number" class="form-control" id="sunriseTarget" min="10" max="100" value="100">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 실시간 수면 데이터 -->
             <div class="row mb-4">
                 <div class="col-md-8">

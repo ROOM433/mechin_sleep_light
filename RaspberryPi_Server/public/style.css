@@ -173,6 +173,11 @@ body {
     border-radius: 0.375rem;
 }
 
+/* 조명 제어 */
+.form-range {
+    height: 2rem;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 768px) {
     .container {

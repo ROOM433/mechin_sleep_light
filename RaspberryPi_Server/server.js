@@ -422,6 +422,55 @@ app.post('/api/sleep/stop', (req, res) => {
     });
 });
 
+// 조명 밝기 설정 API (디밍)
+app.post('/api/light/brightness', (req, res) => {
+    const { deviceId, level } = req.body;
+    if (deviceId == null || level == null) {
+        return res.status(400).json({ error: 'deviceId와 level이 필요합니다.' });
+    }
+    const device = connectedDevices.get(deviceId);
+    if (!device || device.ws.readyState !== WebSocket.OPEN) {
+        return res.status(404).json({ error: '디바이스가 연결되어 있지 않습니다.' });
+    }
+    const command = { command: 'set_brightness', level: Math.max(0, Math.min(100, Number(level))) };
+    device.ws.send(JSON.stringify(command));
+    res.json({ success: true, message: '밝기 명령을 전송했습니다.', command });
+});
+
+// 선라이즈(일출 효과) 시작 API
+app.post('/api/light/sunrise', (req, res) => {
+    const { deviceId, duration_ms, target_level } = req.body;
+    if (!deviceId) {
+        return res.status(400).json({ error: 'deviceId가 필요합니다.' });
+    }
+    const device = connectedDevices.get(deviceId);
+    if (!device || device.ws.readyState !== WebSocket.OPEN) {
+        return res.status(404).json({ error: '디바이스가 연결되어 있지 않습니다.' });
+    }
+    const command = {
+        command: 'sunrise_start',
+        duration_ms: Number(duration_ms || (15 * 60 * 1000)),
+        target_level: Math.max(0, Math.min(100, Number(target_level || 100)))
+    };
+    device.ws.send(JSON.stringify(command));
+    res.json({ success: true, message: '선라이즈를 시작했습니다.', command });
+});
+
+// 선라이즈 취소 API
+app.post('/api/light/sunrise/cancel', (req, res) => {
+    const { deviceId } = req.body;
+    if (!deviceId) {
+        return res.status(400).json({ error: 'deviceId가 필요합니다.' });
+    }
+    const device = connectedDevices.get(deviceId);
+    if (!device || device.ws.readyState !== WebSocket.OPEN) {
+        return res.status(404).json({ error: '디바이스가 연결되어 있지 않습니다.' });
+    }
+    const command = { command: 'sunrise_cancel' };
+    device.ws.send(JSON.stringify(command));
+    res.json({ success: true, message: '선라이즈를 취소했습니다.' });
+});
+
 // 디바이스 상태 조회 API
 app.get('/api/devices', (req, res) => {
     const devices = Array.from(connectedDevices.values()).map(device => ({

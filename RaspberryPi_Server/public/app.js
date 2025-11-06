@@ -60,6 +60,26 @@ class SleepAlarmApp {
         document.getElementById('wakeTime').addEventListener('change', () => {
             this.calculateOptimalWakeTime();
         });
+
+        // 밝기 슬라이더
+        const range = document.getElementById('brightnessRange');
+        const val = document.getElementById('brightnessValue');
+        range.addEventListener('input', () => {
+            val.textContent = `${range.value}%`;
+        });
+        range.addEventListener('change', () => {
+            this.setBrightness(parseInt(range.value, 10));
+        });
+
+        // 선라이즈 버튼들
+        document.getElementById('sunriseStartBtn').addEventListener('click', () => {
+            const minutes = parseInt(document.getElementById('sunriseDuration').value, 10) || 20;
+            const target = parseInt(document.getElementById('sunriseTarget').value, 10) || 100;
+            this.startSunrise(minutes * 60 * 1000, target);
+        });
+        document.getElementById('sunriseCancelBtn').addEventListener('click', () => {
+            this.cancelSunrise();
+        });
     }
 
     initChart() {
@@ -226,13 +246,17 @@ class SleepAlarmApp {
             'setAlarmBtn',
             'startMonitoringBtn',
             'stopMonitoringBtn',
-            'cancelAlarmBtn'
+            'cancelAlarmBtn',
+            'sunriseStartBtn',
+            'sunriseCancelBtn'
         ];
 
         buttons.forEach(buttonId => {
             const button = document.getElementById(buttonId);
             button.disabled = !deviceAvailable;
         });
+
+        document.getElementById('brightnessRange').disabled = !deviceAvailable;
     }
 
     updateSleepData(data) {
@@ -526,6 +550,50 @@ class SleepAlarmApp {
             }
         } catch (error) {
             console.error('디바이스 로드 오류:', error);
+        }
+    }
+
+    async setBrightness(level) {
+        if (!this.currentDeviceId) return;
+        try {
+            await fetch('/api/light/brightness', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: this.currentDeviceId, level })
+            });
+            this.addLog(`밝기 ${level}%로 설정`, 'info');
+        } catch (e) {
+            this.addLog('밝기 설정 실패', 'danger');
+        }
+    }
+
+    async startSunrise(duration_ms, target_level) {
+        if (!this.currentDeviceId) return;
+        try {
+            const res = await fetch('/api/light/sunrise', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: this.currentDeviceId, duration_ms, target_level })
+            });
+            const result = await res.json();
+            if (result.success) this.addLog('선라이즈 시작', 'success');
+        } catch (e) {
+            this.addLog('선라이즈 시작 실패', 'danger');
+        }
+    }
+
+    async cancelSunrise() {
+        if (!this.currentDeviceId) return;
+        try {
+            const res = await fetch('/api/light/sunrise/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: this.currentDeviceId })
+            });
+            const result = await res.json();
+            if (result.success) this.addLog('선라이즈 취소', 'warning');
+        } catch (e) {
+            this.addLog('선라이즈 취소 실패', 'danger');
         }
     }
 }
