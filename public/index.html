@@ -138,6 +138,60 @@
                 </div>
             </div>
 
+            <!-- 디밍 제어 -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-lightbulb"></i> 디밍 제어</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6>전구 전원</h6>
+                                    <div class="btn-group w-100" role="group">
+                                        <button type="button" class="btn btn-success" id="bulbOnBtn" disabled>
+                                            <i class="fas fa-power-off"></i> 켜기
+                                        </button>
+                                        <button type="button" class="btn btn-danger" id="bulbOffBtn" disabled>
+                                            <i class="fas fa-power-off"></i> 끄기
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6>디밍 패턴</h6>
+                                    <div class="mb-2">
+                                        <select class="form-select" id="patternSelect" disabled>
+                                            <option value="1">1. SMOOTH (부드러운 왕복)</option>
+                                            <option value="2">2. STEP (계단식)</option>
+                                            <option value="3">3. PULSE (펄스)</option>
+                                            <option value="4">4. SAW (톱니파)</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label for="maxBrightInput" class="form-label">최대 밝기 (16-100)</label>
+                                        <input type="number" class="form-control" id="maxBrightInput" min="16" max="100" value="100" disabled>
+                                    </div>
+                                    <button class="btn btn-primary w-100" id="startPatternBtn" disabled>
+                                        <i class="fas fa-play"></i> 패턴 시작
+                                    </button>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6>밝기 고정</h6>
+                                    <div class="mb-2">
+                                        <label for="brightnessSlider" class="form-label">밝기: <span id="brightnessValue">50</span>%</label>
+                                        <input type="range" class="form-range" id="brightnessSlider" min="16" max="100" value="50" disabled>
+                                    </div>
+                                    <button class="btn btn-warning w-100" id="setBrightnessBtn" disabled>
+                                        <i class="fas fa-adjust"></i> 밝기 설정
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 알람 로그 -->
             <div class="row">
                 <div class="col-12">

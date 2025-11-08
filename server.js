@@ -458,6 +458,87 @@ app.get('/api/alarm/:deviceId', (req, res) => {
     res.json(alarmSetting);
 });
 
+// 디밍 제어 API들
+
+// 전구 전원 켜/끄기
+app.post('/api/dimmer/power', (req, res) => {
+    const { deviceId, on } = req.body;
+    
+    if (deviceId === undefined || on === undefined) {
+        return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
+    }
+    
+    const device = connectedDevices.get(deviceId);
+    if (!device) {
+        return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
+    }
+    
+    if (device.ws.readyState === WebSocket.OPEN) {
+        const command = {
+            command: 'bulb_power',
+            on: on
+        };
+        
+        device.ws.send(JSON.stringify(command));
+        res.json({ success: true, message: `전구 전원: ${on ? 'ON' : 'OFF'}` });
+    } else {
+        res.status(503).json({ error: '디바이스가 연결되어 있지 않습니다.' });
+    }
+});
+
+// 디밍 패턴 시작
+app.post('/api/dimmer/pattern', (req, res) => {
+    const { deviceId, pattern, maxBright } = req.body;
+    
+    if (!deviceId || !pattern) {
+        return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
+    }
+    
+    const device = connectedDevices.get(deviceId);
+    if (!device) {
+        return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
+    }
+    
+    if (device.ws.readyState === WebSocket.OPEN) {
+        const command = {
+            command: 'bulb_dimming',
+            pattern: pattern,
+            maxBright: maxBright || 100
+        };
+        
+        device.ws.send(JSON.stringify(command));
+        res.json({ success: true, message: `디밍 패턴 ${pattern} 시작` });
+    } else {
+        res.status(503).json({ error: '디바이스가 연결되어 있지 않습니다.' });
+    }
+});
+
+// 밝기 고정 설정
+app.post('/api/dimmer/brightness', (req, res) => {
+    const { deviceId, level } = req.body;
+    
+    if (!deviceId || level === undefined) {
+        return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
+    }
+    
+    const device = connectedDevices.get(deviceId);
+    if (!device) {
+        return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
+    }
+    
+    if (device.ws.readyState === WebSocket.OPEN) {
+        const command = {
+            command: 'set_power_clamped',
+            level: level
+        };
+        
+        device.ws.send(JSON.stringify(command));
+        res.json({ success: true, message: `밝기 설정: ${level}%` });
+    } else {
+        res.status(503).json({ error: '디바이스가 연결되어 있지 않습니다.' });
+    }
+});
+
 // 메인 페이지 라우트
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

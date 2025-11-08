@@ -60,6 +60,28 @@ class SleepAlarmApp {
         document.getElementById('wakeTime').addEventListener('change', () => {
             this.calculateOptimalWakeTime();
         });
+
+        // 디밍 제어 이벤트 리스너
+        document.getElementById('bulbOnBtn').addEventListener('click', () => {
+            this.bulbPower(true);
+        });
+
+        document.getElementById('bulbOffBtn').addEventListener('click', () => {
+            this.bulbPower(false);
+        });
+
+        document.getElementById('startPatternBtn').addEventListener('click', () => {
+            this.startDimmingPattern();
+        });
+
+        document.getElementById('setBrightnessBtn').addEventListener('click', () => {
+            this.setBrightness();
+        });
+
+        // 밝기 슬라이더 값 표시
+        document.getElementById('brightnessSlider').addEventListener('input', (e) => {
+            document.getElementById('brightnessValue').textContent = e.target.value;
+        });
     }
 
     initChart() {
@@ -225,12 +247,28 @@ class SleepAlarmApp {
             'setAlarmBtn',
             'startMonitoringBtn',
             'stopMonitoringBtn',
-            'cancelAlarmBtn'
+            'cancelAlarmBtn',
+            'bulbOnBtn',
+            'bulbOffBtn',
+            'startPatternBtn',
+            'setBrightnessBtn'
         ];
 
         buttons.forEach(buttonId => {
             const button = document.getElementById(buttonId);
-            button.disabled = !deviceAvailable;
+            if (button) button.disabled = !deviceAvailable;
+        });
+
+        // 디밍 제어 입력 필드 활성화/비활성화
+        const dimmerInputs = [
+            'patternSelect',
+            'maxBrightInput',
+            'brightnessSlider'
+        ];
+
+        dimmerInputs.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input) input.disabled = !deviceAvailable;
         });
     }
 
@@ -525,6 +563,118 @@ class SleepAlarmApp {
             }
         } catch (error) {
             console.error('디바이스 로드 오류:', error);
+        }
+    }
+
+    // 디밍 제어 메서드들
+
+    async bulbPower(on) {
+        if (!this.currentDeviceId) {
+            alert('연결된 디바이스가 없습니다.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/dimmer/power', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    deviceId: this.currentDeviceId,
+                    on: on
+                })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addLog(`전구 전원: ${on ? 'ON' : 'OFF'}`, on ? 'success' : 'warning');
+            } else {
+                this.addLog(`전구 전원 제어 실패: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('전구 전원 제어 오류:', error);
+            this.addLog('전구 전원 제어 중 오류 발생', 'danger');
+        }
+    }
+
+    async startDimmingPattern() {
+        if (!this.currentDeviceId) {
+            alert('연결된 디바이스가 없습니다.');
+            return;
+        }
+
+        const pattern = parseInt(document.getElementById('patternSelect').value);
+        const maxBright = parseInt(document.getElementById('maxBrightInput').value);
+
+        if (maxBright < 16 || maxBright > 100) {
+            alert('최대 밝기는 16-100 사이의 값이어야 합니다.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/dimmer/pattern', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    deviceId: this.currentDeviceId,
+                    pattern: pattern,
+                    maxBright: maxBright
+                })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                const patternNames = ['', 'SMOOTH', 'STEP', 'PULSE', 'SAW'];
+                this.addLog(`디밍 패턴 시작: ${patternNames[pattern]}, 최대 밝기: ${maxBright}%`, 'success');
+            } else {
+                this.addLog(`디밍 패턴 시작 실패: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('디밍 패턴 시작 오류:', error);
+            this.addLog('디밍 패턴 시작 중 오류 발생', 'danger');
+        }
+    }
+
+    async setBrightness() {
+        if (!this.currentDeviceId) {
+            alert('연결된 디바이스가 없습니다.');
+            return;
+        }
+
+        const level = parseInt(document.getElementById('brightnessSlider').value);
+
+        if (level < 16 || level > 100) {
+            alert('밝기는 16-100 사이의 값이어야 합니다.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/dimmer/brightness', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    deviceId: this.currentDeviceId,
+                    level: level
+                })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addLog(`밝기 설정: ${level}%`, 'success');
+            } else {
+                this.addLog(`밝기 설정 실패: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('밝기 설정 오류:', error);
+            this.addLog('밝기 설정 중 오류 발생', 'danger');
         }
     }
 }
