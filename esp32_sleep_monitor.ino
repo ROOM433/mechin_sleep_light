@@ -455,6 +455,12 @@ struct DimState {
 class DimmerController {
 private:
     uint8_t current_brightness = MIN_BRIGHT;  // 현재 밝기 (MIN_BRIGHT-100)
+    // 선라이즈 상태
+    bool sunrise_active = false;
+    unsigned long sunrise_start_time = 0;
+    unsigned long sunrise_duration = 0;
+    uint8_t sunrise_target = 100;
+    uint8_t sunrise_start_level = MIN_BRIGHT;
 
 public:
     /**
@@ -533,9 +539,26 @@ public:
     }
 
     /**
-     * 디밍 패턴 업데이트 (loop에서 주기적으로 호출)
+     * 디밍/선라이즈 업데이트 (loop에서 주기적으로 호출)
      */
     void updateDimming() {
+        // 선라이즈 우선 처리
+        if (sunrise_active) {
+            unsigned long elapsed = millis() - sunrise_start_time;
+            if (elapsed >= sunrise_duration) {
+                setPowerClampedDirect(sunrise_target);
+                current_brightness = clampBright(sunrise_target);
+                sunrise_active = false;
+            } else {
+                float progress = (float)elapsed / (float)sunrise_duration;
+                int new_level = sunrise_start_level +
+                                (int)((int)sunrise_target - (int)sunrise_start_level) * progress;
+                setPowerClampedDirect(new_level);
+                current_brightness = clampBright(new_level);
+            }
+            return;
+        }
+
         if (!dimst.running) return;
 
         const unsigned long now = millis();
@@ -623,6 +646,48 @@ public:
     bool isPatternRunning() {
         return dimst.running;
     }
+
+    /**
+     * 선라이즈(일출 효과) 시작
+     * @param duration_ms 선라이즈 지속 시간 (밀리초)
+     * @param target_level 목표 밝기 (16-100)
+     */
+    void startSunrise(unsigned long duration_ms, uint8_t target_level) {
+        sunrise_start_level = max((int)MIN_BRIGHT, (int)current_brightness);
+        sunrise_target = clampBright(target_level);
+        sunrise_duration = max(1UL, duration_ms);
+        sunrise_start_time = millis();
+        sunrise_active = true;
+        // 패턴은 일시 중지
+        dimst.running = false;
+        dimmer.setState(ON);
+        char msg[128];
+        snprintf(msg, sizeof(msg), "[SUNRISE] %d%% -> %d%% over %lu ms",
+                 sunrise_start_level, sunrise_target, sunrise_duration);
+        st_debug_print(2, msg);
+    }
+
+    /**
+     * 선라이즈 취소
+     */
+    void cancelSunrise() {
+        if (sunrise_active) {
+            sunrise_active = false;
+            st_debug_print(2, "[SUNRISE] Cancelled");
+        }
+    }
+
+    /**
+     * 선라이즈 동작 여부
+     */
+    bool isSunriseActive() const {
+        return sunrise_active;
+    }
+
+    /**
+     * 패턴 실행 중인지 확인
+     */
+    // 위에 구현됨
 };
 
 /**

@@ -9,8 +9,8 @@
 #define DEBUG_MEASURE
 #define DEBUG_NET
 
-#define WIFI_SSID     "SSID"
-#define WIFI_PASSWORD "PASSWORD"
+#define WIFI_SSID     "둠별5"
+#define WIFI_PASSWORD "75450111"
 
 #ifndef COOP
 #define CRIT_SECTION_START unsigned long _i_flags = arch_local_irq_save()
