@@ -187,22 +187,42 @@ public:
 
 private:
     void read(uint8_t addr, uint8_t num, byte data[]) {
-        Wire.beginTransmission(DEV_ADDR);
-        Wire.write(addr);
-        Wire.endTransmission();
-        Wire.requestFrom(DEV_ADDR, num);
-        for (int i = 0; i < num; i++) {
-            if(Wire.available()) {
-                data[i] = Wire.read();
+        // 재시도 로직 (최대 3회)
+        for (int retry = 0; retry < 3; retry++) {
+            Wire.beginTransmission(DEV_ADDR);
+            Wire.write(addr);
+            if (Wire.endTransmission() == 0) {  // 주소 전송 성공
+                uint8_t received = Wire.requestFrom(DEV_ADDR, num, true);  // true = stop bit
+                if (received == num) {
+                    for (int i = 0; i < num; i++) {
+                        if(Wire.available()) {
+                            data[i] = Wire.read();
+                        } else {
+                            data[i] = 0;
+                        }
+                    }
+                    return;  // 성공적으로 읽음
+                }
             }
+            delay(5);  // 재시도 전 짧은 대기
+        }
+        // 실패 시 0으로 채움
+        for (int i = 0; i < num; i++) {
+            data[i] = 0;
         }
     }
 
     void write(uint8_t addr, uint8_t val) {
-        Wire.beginTransmission(DEV_ADDR);
-        Wire.write(addr);
-        Wire.write(val);
-        Wire.endTransmission();
+        // 재시도 로직 (최대 3회)
+        for (int retry = 0; retry < 3; retry++) {
+            Wire.beginTransmission(DEV_ADDR);
+            Wire.write(addr);
+            Wire.write(val);
+            if (Wire.endTransmission() == 0) {  // 성공
+                return;
+            }
+            delay(5);  // 재시도 전 짧은 대기
+        }
     }
 };
 
@@ -241,22 +261,42 @@ public:
 
 private:
     void read(uint8_t addr, uint8_t num, byte data[]) {
-        Wire.beginTransmission(DEV_ADDR);
-        Wire.write(addr);
-        Wire.endTransmission();
-        Wire.requestFrom(DEV_ADDR, num);
-        for (int i = 0; i < num; i++) {
-            if(Wire.available()) {
-                data[i] = Wire.read();
+        // 재시도 로직 (최대 3회)
+        for (int retry = 0; retry < 3; retry++) {
+            Wire.beginTransmission(DEV_ADDR);
+            Wire.write(addr);
+            if (Wire.endTransmission() == 0) {  // 주소 전송 성공
+                uint8_t received = Wire.requestFrom(DEV_ADDR, num, true);  // true = stop bit
+                if (received == num) {
+                    for (int i = 0; i < num; i++) {
+                        if(Wire.available()) {
+                            data[i] = Wire.read();
+                        } else {
+                            data[i] = 0;
+                        }
+                    }
+                    return;  // 성공적으로 읽음
+                }
             }
+            delay(5);  // 재시도 전 짧은 대기
+        }
+        // 실패 시 0으로 채움
+        for (int i = 0; i < num; i++) {
+            data[i] = 0;
         }
     }
 
     void write(uint8_t addr, uint8_t val) {
-        Wire.beginTransmission(DEV_ADDR);
-        Wire.write(addr);
-        Wire.write(val);
-        Wire.endTransmission();
+        // 재시도 로직 (최대 3회)
+        for (int retry = 0; retry < 3; retry++) {
+            Wire.beginTransmission(DEV_ADDR);
+            Wire.write(addr);
+            Wire.write(val);
+            if (Wire.endTransmission() == 0) {  // 성공
+                return;
+            }
+            delay(5);  // 재시도 전 짧은 대기
+        }
     }
 };
 
@@ -294,24 +334,43 @@ private:
     
     void read(int dev, byte addr, int num, byte data[])
     {
-        Wire.beginTransmission(dev);
-        Wire.write(addr);
-        Wire.endTransmission();
-        Wire.requestFrom(dev, num);
-        for (int i = 0; i < num; i++) {
-            if(Wire.available()) {
-                data[i] = Wire.read();
+        // 재시도 로직 (최대 3회)
+        for (int retry = 0; retry < 3; retry++) {
+            Wire.beginTransmission(dev);
+            Wire.write(addr);
+            if (Wire.endTransmission() == 0) {  // 주소 전송 성공
+                uint8_t received = Wire.requestFrom(dev, num, true);  // true = stop bit
+                if (received == num) {
+                    for (int i = 0; i < num; i++) {
+                        if(Wire.available()) {
+                            data[i] = Wire.read();
+                        } else {
+                            data[i] = 0;
+                        }
+                    }
+                    return;  // 성공적으로 읽음
+                }
             }
+            delay(5);  // 재시도 전 짧은 대기
         }
-        Wire.endTransmission();
+        // 실패 시 0으로 채움
+        for (int i = 0; i < num; i++) {
+            data[i] = 0;
+        }
     }
      
     void write(int dev, byte addr, byte val)
     {
-        Wire.beginTransmission(dev);
-        Wire.write(addr);
-        Wire.write(val);
-        Wire.endTransmission();
+        // 재시도 로직 (최대 3회)
+        for (int retry = 0; retry < 3; retry++) {
+            Wire.beginTransmission(dev);
+            Wire.write(addr);
+            Wire.write(val);
+            if (Wire.endTransmission() == 0) {  // 성공
+                return;
+            }
+            delay(5);  // 재시도 전 짧은 대기
+        }
     }
 };
 
@@ -705,8 +764,15 @@ private:
     bool is_monitoring = false;
     bool alarm_active = false;
     unsigned long alarm_time = 0;
+    bool alarm_triggered_notified = false;  // 알람 발생 알림을 이미 보냈는지
     unsigned long last_send_time = 0;
     const unsigned long SEND_INTERVAL = 5000; // 5초마다 데이터 전송
+    
+    // 수면 감지 관련 변수
+    bool sleep_detected_sent = false;  // 수면 감지 신호를 이미 보냈는지
+    unsigned long last_movement_time = 0;  // 마지막 움직임 시간
+    const unsigned long SLEEP_DETECTION_TIMEOUT = 60 * 1000;  // 1분 (밀리초)
+    const float MOVEMENT_THRESHOLD = 0.2;  // 움직임 판단 임계값
     
     bool ws_connected = false;
     unsigned long last_reconnect_try = 0;
@@ -721,7 +787,11 @@ private:
 
 public:
     void begin() {
+        // I2C 초기화 및 안정화
         Wire.begin();
+        Wire.setClock(100000);  // 100kHz로 낮춤 (안정성 향상)
+        delay(100);  // I2C 버스 안정화 대기
+        
         pinMode(BUZZER_PIN, OUTPUT);
         pinMode(LED_PIN, OUTPUT);
         
@@ -733,6 +803,8 @@ public:
             st_debug_print(2, "[SENSOR] Using MOCK accelerometer (for testing)");
         } else {
             st_debug_print(2, "[SENSOR] Using REAL 9-DOF IMU (ADXL345 + ITG3205 + HMC5883)");
+            // 센서 초기화 대기 시간
+            delay(500);
             // 자이로 캘리브레이션 (정지 상태에서 1초간)
             delay(1000);
             imu9dof.calibrate_gyro();
@@ -786,6 +858,24 @@ public:
                 sleep_buffer.pop_front();
             }
             
+            // 수면 감지: 1분 이상 움직임이 없으면 자고있다고 판단
+            if (!sleep_detected_sent) {
+                if (data.movement_score < MOVEMENT_THRESHOLD) {
+                    // 움직임이 거의 없음
+                    if (last_movement_time == 0) {
+                        last_movement_time = millis();
+                    } else if (millis() - last_movement_time >= SLEEP_DETECTION_TIMEOUT) {
+                        // 1분 이상 움직임 없음 -> 수면 감지
+                        sendSleepDetected();
+                        sleep_detected_sent = true;
+                        st_debug_print(2, "[SLEEP] Sleep detected - 1 minute no movement");
+                    }
+                } else {
+                    // 움직임이 있음 -> 리셋
+                    last_movement_time = 0;
+                }
+            }
+            
             // 주기적으로 서버에 데이터 전송
             if (millis() - last_send_time > SEND_INTERVAL) {
                 sendSleepData();
@@ -793,10 +883,11 @@ public:
             }
         }
         
-        // 알람 체크
+        // 알람 체크 및 업데이트
         if (alarm_active && millis() >= alarm_time) {
-            triggerAlarm();
+            triggerAlarm();  // 첫 알람 발생 알림
         }
+        updateAlarm();  // 알람 반복 실행
         
         // 디밍 패턴 업데이트
         dimmer.updateDimming();
@@ -907,6 +998,8 @@ private:
     void startMonitoring() {
         is_monitoring = true;
         sleep_buffer.clear();
+        sleep_detected_sent = false;  // 수면 감지 상태 리셋
+        last_movement_time = 0;  // 움직임 시간 리셋
         st_debug_print(2, "Sleep monitoring started");
         
         // 서버에 모니터링 시작 알림
@@ -922,6 +1015,8 @@ private:
 
     void stopMonitoring() {
         is_monitoring = false;
+        sleep_detected_sent = false;  // 수면 감지 상태 리셋
+        last_movement_time = 0;  // 움직임 시간 리셋
         st_debug_print(2, "Sleep monitoring stopped");
         
         // 서버에 모니터링 중지 알림
@@ -935,42 +1030,80 @@ private:
         if (ws_connected) wsClient.send(response);
     }
 
+    /**
+     * 수면 감지 신호 전송 (1분 이상 움직임 없음)
+     */
+    void sendSleepDetected() {
+        DynamicJsonDocument doc(256);
+        doc["device_id"] = "ESP32_001";
+        doc["status"] = "sleep_detected";
+        doc["timestamp"] = millis();
+        doc["sleep_start_time"] = last_movement_time;  // 수면 시작 시간
+        
+        String response;
+        serializeJson(doc, response);
+        if (ws_connected) {
+            wsClient.send(response);
+            st_debug_print(2, "[SLEEP] Sleep detected signal sent to server");
+        }
+    }
+
     void setAlarm(unsigned long timestamp) {
         alarm_time = timestamp;
         alarm_active = true;
+        alarm_triggered_notified = false;  // 알람 알림 상태 리셋
         st_debug_print(2, "Alarm set for: " + String(timestamp));
     }
 
     void cancelAlarm() {
         alarm_active = false;
         alarm_time = 0;
+        alarm_triggered_notified = false;  // 알람 알림 상태 리셋
         st_debug_print(2, "Alarm cancelled");
+        
+        // 부저와 LED 즉시 끄기
+        digitalWrite(BUZZER_PIN, LOW);
+        digitalWrite(LED_PIN, LOW);
     }
 
     void triggerAlarm() {
-        st_debug_print(2, "ALARM TRIGGERED!");
-        
-        // 부저와 LED로 알람 발생
-        for (int i = 0; i < 10; i++) {
-            digitalWrite(BUZZER_PIN, HIGH);
-            digitalWrite(LED_PIN, HIGH);
-            delay(200);
+        if (!alarm_triggered_notified) {
+            st_debug_print(2, "ALARM TRIGGERED!");
+            
+            // 서버에 알람 발생 알림 (한 번만)
+            DynamicJsonDocument doc(256);
+            doc["device_id"] = "ESP32_001";
+            doc["status"] = "alarm_triggered";
+            doc["timestamp"] = millis();
+            
+            String response;
+            serializeJson(doc, response);
+            if (ws_connected) wsClient.send(response);
+            
+            alarm_triggered_notified = true;
+        }
+    }
+    
+    /**
+     * 알람 반복 실행 (loop에서 호출)
+     */
+    void updateAlarm() {
+        if (alarm_active && millis() >= alarm_time) {
+            // 부저와 LED로 알람 발생 (계속 반복)
+            static unsigned long last_alarm_toggle = 0;
+            static bool alarm_state = false;
+            
+            if (millis() - last_alarm_toggle >= 200) {
+                alarm_state = !alarm_state;
+                digitalWrite(BUZZER_PIN, alarm_state ? HIGH : LOW);
+                digitalWrite(LED_PIN, alarm_state ? HIGH : LOW);
+                last_alarm_toggle = millis();
+            }
+        } else {
+            // 알람이 꺼지면 부저와 LED도 끄기
             digitalWrite(BUZZER_PIN, LOW);
             digitalWrite(LED_PIN, LOW);
-            delay(200);
         }
-        
-        alarm_active = false;
-        
-        // 서버에 알람 발생 알림
-        DynamicJsonDocument doc(256);
-        doc["device_id"] = "ESP32_001";
-        doc["status"] = "alarm_triggered";
-        doc["timestamp"] = millis();
-        
-        String response;
-        serializeJson(doc, response);
-        if (ws_connected) wsClient.send(response);
     }
 
     void sendSleepData() {

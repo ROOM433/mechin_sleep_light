@@ -147,20 +147,27 @@ wss.on('connection', (ws, req) => {
 function handleWebSocketMessage(ws, data) {
     const { device_id, data_type, status, timestamp } = data;
 
-    switch (data_type) {
-        case 'sleep_data':
-            handleSleepData(device_id, data);
-            break;
-            
-        case 'device_status':
-            handleDeviceStatus(ws, device_id, data);
-            break;
-            
-        default:
-            console.log('알 수 없는 데이터 타입:', data_type);
+    // data_type 기반 처리
+    if (data_type) {
+        switch (data_type) {
+            case 'sleep_data':
+                handleSleepData(device_id, data);
+                break;
+                
+            case 'device_status':
+                // device_status는 status 기반으로도 처리되므로 handleDeviceConnection 호출
+                if (data.status === 'connected') {
+                    handleDeviceConnection(ws, device_id, data);
+                }
+                break;
+                
+            default:
+                // data_type이 있지만 알 수 없는 경우에만 경고
+                console.log('알 수 없는 데이터 타입:', data_type);
+        }
     }
 
-    // 상태별 처리
+    // 상태별 처리 (status 기반 메시지는 data_type이 없을 수 있음)
     if (status) {
         switch (status) {
             case 'connected':
@@ -174,6 +181,9 @@ function handleWebSocketMessage(ws, data) {
                 break;
             case 'alarm_triggered':
                 handleAlarmTriggered(device_id, data);
+                break;
+            case 'sleep_detected':
+                handleSleepDetected(device_id, data);
                 break;
         }
     }
@@ -266,6 +276,63 @@ function handleAlarmTriggered(deviceId, data) {
 }
 
 /**
+ * 수면 감지 처리
+ */
+function handleSleepDetected(deviceId, data) {
+    console.log(`디바이스 ${deviceId} 수면 감지됨`);
+    
+    // 알람 설정이 있는지 확인
+    const alarmSetting = alarmSettings.get(deviceId);
+    if (!alarmSetting) {
+        console.log(`디바이스 ${deviceId}에 알람 설정이 없습니다.`);
+        return;
+    }
+    
+    const { targetWakeTime } = alarmSetting;
+    const now = Date.now();
+    
+    // 90분 사이클 기반으로 최적 알람 시간 계산
+    const cycleDuration = 90 * 60 * 1000; // 90분 (밀리초)
+    const timeToTarget = targetWakeTime - now;
+    
+    // 90분 사이클로 나누어 최적의 시간 계산
+    const cyclesToTarget = Math.floor(timeToTarget / cycleDuration);
+    const optimalTime = targetWakeTime - (cyclesToTarget * cycleDuration);
+    
+    // 얕은잠 단계에서 깨우기 위해 약간의 여유 시간 추가
+    const shallowSleepWindow = 15 * 60 * 1000; // 15분
+    const recommendedAlarmTime = Math.max(optimalTime - shallowSleepWindow, now + (30 * 60 * 1000)); // 최소 30분 후
+    
+    // 알람 설정 업데이트
+    alarmSettings.set(deviceId, {
+        ...alarmSetting,
+        optimalWakeTime: optimalTime,
+        recommendedTime: recommendedAlarmTime,
+        sleepDetectedAt: now
+    });
+    
+    // ESP32에 알람 설정 전송
+    const device = connectedDevices.get(deviceId);
+    if (device && device.ws.readyState === WebSocket.OPEN) {
+        const alarmCommand = {
+            command: 'set_alarm',
+            alarm_time: recommendedAlarmTime,
+            target_wake_time: targetWakeTime
+        };
+        
+        device.ws.send(JSON.stringify(alarmCommand));
+        console.log(`디바이스 ${deviceId}에 알람 설정 전송: ${new Date(recommendedAlarmTime).toLocaleString()}`);
+    }
+    
+    // 웹 클라이언트들에게 수면 감지 알림
+    broadcastSleepDetected(deviceId, {
+        sleepDetectedAt: now,
+        recommendedAlarmTime: recommendedAlarmTime,
+        targetWakeTime: targetWakeTime
+    });
+}
+
+/**
  * 디바이스 상태 브로드캐스트
  */
 function broadcastDeviceStatus() {
@@ -303,6 +370,20 @@ function broadcastAlarmTriggered(deviceId) {
     const data = {
         type: 'alarm_triggered',
         deviceId: deviceId,
+        timestamp: Date.now()
+    };
+    
+    broadcastToWebClients(data);
+}
+
+/**
+ * 수면 감지 브로드캐스트
+ */
+function broadcastSleepDetected(deviceId, sleepInfo) {
+    const data = {
+        type: 'sleep_detected',
+        deviceId: deviceId,
+        sleepInfo: sleepInfo,
         timestamp: Date.now()
     };
     
@@ -505,6 +586,36 @@ app.get('/api/alarm/:deviceId', (req, res) => {
     }
     
     res.json(alarmSetting);
+});
+
+// 알람 취소 API
+app.post('/api/alarm/cancel', (req, res) => {
+    const { deviceId } = req.body;
+    
+    if (!deviceId) {
+        return res.status(400).json({ error: '디바이스 ID가 필요합니다.' });
+    }
+    
+    const device = connectedDevices.get(deviceId);
+    if (!device) {
+        return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
+    }
+    
+    // ESP32에 알람 취소 명령 전송
+    const command = {
+        command: 'cancel_alarm',
+        timestamp: Date.now()
+    };
+    
+    device.ws.send(JSON.stringify(command));
+    
+    // 알람 설정 삭제
+    alarmSettings.delete(deviceId);
+    
+    res.json({
+        success: true,
+        message: '알람이 취소되었습니다.'
+    });
 });
 
 // 메인 페이지 라우트

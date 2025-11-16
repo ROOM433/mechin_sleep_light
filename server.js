@@ -11,7 +11,13 @@ const wss = new WebSocket.Server({ server });
 // 미들웨어 설정
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// 정적 파일 서빙 최적화 (캐싱 및 압축)
+app.use(express.static(path.join(__dirname, 'public'), {
+    maxAge: '1d',  // 1일간 캐싱
+    etag: true,    // ETag 활성화
+    lastModified: true  // Last-Modified 헤더 활성화
+}));
 
 // 전역 변수
 let connectedDevices = new Map(); // 연결된 ESP32 디바이스들
@@ -172,6 +178,9 @@ function handleWebSocketMessage(ws, data) {
             case 'monitoring_stopped':
                 handleMonitoringStopped(device_id, data);
                 break;
+            case 'sleep_detected':
+                handleSleepDetected(device_id, data);
+                break;
             case 'alarm_triggered':
                 handleAlarmTriggered(device_id, data);
                 break;
@@ -256,6 +265,72 @@ function handleMonitoringStopped(deviceId, data) {
 }
 
 /**
+ * 수면 감지 처리 (1분 이상 움직임 없음)
+ */
+function handleSleepDetected(deviceId, data) {
+    console.log(`디바이스 ${deviceId} 수면 감지됨`);
+    
+    const device = connectedDevices.get(deviceId);
+    if (!device) return;
+    
+    // 알람 설정이 있는지 확인
+    const alarmSetting = alarmSettings.get(deviceId);
+    if (!alarmSetting) {
+        console.log(`디바이스 ${deviceId}에 알람 설정이 없습니다.`);
+        return;
+    }
+    
+    // 수면 시작 시간 기록
+    const sleepStartTime = data.sleep_start_time || Date.now();
+    
+    // 90분 사이클 기반으로 최적 알람 시간 계산
+    const targetWakeTime = alarmSetting.targetWakeTime;
+    const now = Date.now();
+    const timeToTarget = targetWakeTime - now;
+    
+    // 90분 사이클 계산
+    const cycleDuration = 90 * 60 * 1000; // 90분
+    const cyclesToTarget = Math.floor(timeToTarget / cycleDuration);
+    const optimalWakeTime = targetWakeTime - (cyclesToTarget * cycleDuration);
+    
+    // 얕은잠 단계에서 깨우기 위해 15분 여유
+    const shallowSleepWindow = 15 * 60 * 1000; // 15분
+    const recommendedAlarmTime = Math.max(optimalWakeTime - shallowSleepWindow, now + (30 * 60 * 1000));
+    
+    console.log(`수면 감지 - 최적 알람 시간 계산: ${new Date(recommendedAlarmTime).toLocaleString()}`);
+    
+    // ESP32에 알람 시간 설정
+    if (device.ws.readyState === WebSocket.OPEN) {
+        const alarmCommand = {
+            command: 'set_alarm',
+            alarm_time: recommendedAlarmTime,
+            target_wake_time: targetWakeTime,
+            sleep_start_time: sleepStartTime
+        };
+        
+        device.ws.send(JSON.stringify(alarmCommand));
+        console.log(`ESP32에 알람 시간 전송: ${new Date(recommendedAlarmTime).toLocaleString()}`);
+    }
+    
+    // 알람 설정 업데이트
+    alarmSettings.set(deviceId, {
+        ...alarmSetting,
+        sleepDetected: true,
+        sleepStartTime: sleepStartTime,
+        optimalWakeTime: optimalWakeTime,
+        recommendedTime: recommendedAlarmTime,
+        sleepDetectedAt: Date.now()
+    });
+    
+    // 웹 클라이언트들에게 수면 감지 알림
+    broadcastSleepDetected(deviceId, {
+        sleepStartTime: sleepStartTime,
+        recommendedAlarmTime: recommendedAlarmTime,
+        cyclesToTarget: cyclesToTarget
+    });
+}
+
+/**
  * 알람 발생 처리
  */
 function handleAlarmTriggered(deviceId, data) {
@@ -290,6 +365,20 @@ function broadcastSleepData(deviceId, analysis) {
         type: 'sleep_data',
         deviceId: deviceId,
         analysis: analysis,
+        timestamp: Date.now()
+    };
+    
+    broadcastToWebClients(data);
+}
+
+/**
+ * 수면 감지 브로드캐스트
+ */
+function broadcastSleepDetected(deviceId, sleepInfo) {
+    const data = {
+        type: 'sleep_detected',
+        deviceId: deviceId,
+        sleepInfo: sleepInfo,
         timestamp: Date.now()
     };
     
@@ -456,6 +545,38 @@ app.get('/api/alarm/:deviceId', (req, res) => {
     }
     
     res.json(alarmSetting);
+});
+
+// 알람 취소 API
+app.post('/api/alarm/cancel', (req, res) => {
+    const { deviceId } = req.body;
+    
+    if (!deviceId) {
+        return res.status(400).json({ error: '디바이스 ID가 필요합니다.' });
+    }
+    
+    const device = connectedDevices.get(deviceId);
+    if (!device) {
+        return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
+    }
+    
+    // ESP32에 알람 취소 명령 전송
+    if (device.ws.readyState === WebSocket.OPEN) {
+        const command = {
+            command: 'cancel_alarm',
+            timestamp: Date.now()
+        };
+        
+        device.ws.send(JSON.stringify(command));
+    }
+    
+    // 알람 설정 제거
+    alarmSettings.delete(deviceId);
+    
+    res.json({
+        success: true,
+        message: '알람이 취소되었습니다.'
+    });
 });
 
 // 디밍 제어 API들

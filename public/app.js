@@ -183,6 +183,9 @@ class SleepAlarmApp {
             case 'sleep_data':
                 this.updateSleepData(data);
                 break;
+            case 'sleep_detected':
+                this.handleSleepDetected(data);
+                break;
             case 'alarm_triggered':
                 this.handleAlarmTriggered(data);
                 break;
@@ -380,14 +383,13 @@ class SleepAlarmApp {
         }
 
         try {
-            const response = await fetch('/api/alarm/set', {
+            const response = await fetch('/api/alarm/cancel', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    deviceId: this.currentDeviceId,
-                    cancel: true
+                    deviceId: this.currentDeviceId
                 })
             });
 
@@ -399,11 +401,23 @@ class SleepAlarmApp {
                 // 버튼 상태 변경
                 document.getElementById('setAlarmBtn').disabled = false;
                 document.getElementById('cancelAlarmBtn').disabled = true;
+            } else {
+                this.addLog(`알람 취소 실패: ${result.error}`, 'danger');
             }
         } catch (error) {
             console.error('알람 취소 오류:', error);
             this.addLog('알람 취소 중 오류 발생', 'danger');
         }
+    }
+
+    handleSleepDetected(data) {
+        if (data.deviceId !== this.currentDeviceId) return;
+        
+        const sleepInfo = data.sleepInfo;
+        const alarmTime = new Date(sleepInfo.recommendedAlarmTime);
+        
+        this.addLog(`수면 감지됨! 알람 시간: ${alarmTime.toLocaleString()}`, 'success');
+        this.addLog(`90분 사이클 ${sleepInfo.cyclesToTarget}개 후 기상`, 'info');
     }
 
     async startMonitoring() {
