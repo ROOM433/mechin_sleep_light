@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,8 +14,9 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="style.css" rel="stylesheet">
 </head>
+
 <body>
-    <div class="container-fluid">
+    <div class="container-fluid p-0">
         <!-- 헤더 -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
             <div class="container">
@@ -29,191 +31,305 @@
             </div>
         </nav>
 
-        <div class="container mt-4">
-            <!-- 디바이스 상태 카드 -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5><i class="fas fa-microchip"></i> 디바이스 상태</h5>
-                        </div>
-                        <div class="card-body">
-                            <div id="deviceStatus">
-                                <p class="text-muted">디바이스를 연결 중...</p>
-                            </div>
-                        </div>
+        <div class="container mt-3 mb-4">
+
+            <!-- 상단: 디바이스 상태 (항상 보이도록) -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-microchip"></i> 디바이스 상태</span>
+                </div>
+                <div class="card-body p-2">
+                    <div id="deviceStatus">
+                        <p class="text-muted mb-0">디바이스를 연결 중...</p>
                     </div>
                 </div>
-                
-                <div class="col-md-6">
-                    <div class="card">
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-lightbulb"></i> 전구 전원
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" class="btn btn-success" id="bulbOnBtn" disabled>
+                            <i class="fas fa-power-off"></i> 켜기
+                        </button>
+                        <button type="button" class="btn btn-danger" id="bulbOffBtn" disabled>
+                            <i class="fas fa-power-off"></i> 끄기
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 메인 탭 네비게이션 -->
+            <ul class="nav nav-pills nav-fill mb-3" id="mainTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="alarm-tab" data-bs-toggle="tab" data-bs-target="#tab-alarm"
+                        type="button" role="tab">
+                        <i class="fas fa-bell"></i> 알람
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="sleep-tab" data-bs-toggle="tab" data-bs-target="#tab-sleep"
+                        type="button" role="tab">
+                        <i class="fas fa-heartbeat"></i> 수면
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="light-tab" data-bs-toggle="tab" data-bs-target="#tab-light"
+                        type="button" role="tab">
+                        <i class="fas fa-lightbulb"></i> 조명
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="log-tab" data-bs-toggle="tab" data-bs-target="#tab-log" type="button"
+                        role="tab">
+                        <i class="fas fa-history"></i> 로그
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="mainTabContent">
+                <!-- 탭 1: 알람 설정 -->
+                <div class="tab-pane fade show active" id="tab-alarm" role="tabpanel" aria-labelledby="alarm-tab">
+                    <!-- 알람 설정 카드 -->
+                    <div class="card mb-3">
                         <div class="card-header">
-                            <h5><i class="fas fa-clock"></i> 알람 설정</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-clock"></i> 알람 설정
+                            </h5>
                         </div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <label for="wakeTime" class="form-label">목표 기상 시간</label>
                                 <input type="datetime-local" class="form-control" id="wakeTime">
                             </div>
-                            <button class="btn btn-primary" id="setAlarmBtn" disabled>
-                                <i class="fas fa-bell"></i> 알람 설정
-                            </button>
-                            <button class="btn btn-danger ms-2" id="cancelAlarmBtn" disabled>
-                                <i class="fas fa-bell-slash"></i> 알람 취소
-                            </button>
+
+                            <div class="mb-3">
+                                <label class="form-label">알람 시 조명 패턴</label>
+                                <select class="form-select" id="patternSelect" disabled>
+                                    <option value="1">1. SMOOTH (부드러운 왕복)</option>
+                                    <option value="2">2. STEP (계단식)</option>
+                                    <option value="3">3. PULSE (펄스)</option>
+                                    <option value="4">4. SAW (톱니파)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="maxBrightInput" class="form-label">
+                                    알람 시 최대 밝기 (16-100)
+                                </label>
+                                <input type="number" class="form-control" id="maxBrightInput" min="16" max="100"
+                                    value="100" disabled>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="dimmingSpeedInputAlarm" class="form-label">
+                                    알람 시 디밍 속도 (ms, 최소 200)
+                                </label>
+                                <input type="number" class="form-control" id="dimmingSpeedInputAlarm" min="200"
+                                    value="4000" disabled>
+                                <small class="text-muted">
+                                    조명 패턴 한 사이클 시간(ms)입니다. 값이 클수록 더 천천히 변화합니다.
+                                </small>
+                            </div>
+
+                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                <button class="btn btn-primary flex-fill" id="setAlarmBtn" disabled>
+                                    <i class="fas fa-bell"></i> 알람 설정
+                                </button>
+                                <button class="btn btn-danger flex-fill" id="cancelAlarmBtn" disabled>
+                                    <i class="fas fa-bell-slash"></i> 알람 취소
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 간단 안내 카드 -->
+                    <div class="card">
+                        <div class="card-body py-2">
+                            <small class="text-muted">
+                                목표 기상 시간을 설정하면, 수면 감지 후 90분 수면 사이클을 고려해
+                                최적 기상 시점에 맞춰 알람과 조명 패턴이 자동으로 실행됩니다.
+                            </small>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 수면 모니터링 컨트롤 -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
+                <!-- 탭 2: 수면 모니터링 / 데이터 -->
+                <div class="tab-pane fade" id="tab-sleep" role="tabpanel" aria-labelledby="sleep-tab">
+                    <!-- 수면 모니터링 컨트롤 -->
+                    <div class="card mb-3">
                         <div class="card-header">
-                            <h5><i class="fas fa-heartbeat"></i> 수면 모니터링</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-heartbeat"></i> 수면 모니터링
+                            </h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <button class="btn btn-success w-100" id="startMonitoringBtn" disabled>
+                            <div class="row g-2 align-items-center">
+                                <div class="col-12 col-sm-5">
+                                    <button class="btn btn-success w-100 mb-2 mb-sm-0" id="startMonitoringBtn" disabled>
                                         <i class="fas fa-play"></i> 모니터링 시작
                                     </button>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-12 col-sm-5">
                                     <button class="btn btn-warning w-100" id="stopMonitoringBtn" disabled>
                                         <i class="fas fa-stop"></i> 모니터링 중지
                                     </button>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="alert alert-info mb-0 text-center">
-                                        <strong>상태:</strong> <span id="monitoringStatus">대기 중</span>
+                                <div class="col-12 mt-2">
+                                    <div class="alert alert-info mb-0 text-center py-2">
+                                        <strong>상태:</strong>
+                                        <span id="monitoringStatus" class="ms-1">대기 중</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- 실시간 수면 데이터 -->
-            <div class="row mb-4">
-                <div class="col-md-8">
-                    <div class="card">
+                    <!-- 실시간 수면 데이터 -->
+                    <div class="card mb-3">
                         <div class="card-header">
-                            <h5><i class="fas fa-chart-line"></i> 실시간 수면 데이터</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-line"></i> 실시간 수면 데이터
+                            </h5>
                         </div>
-                        <div class="card-body">
-                            <canvas id="sleepChart" width="400" height="200"></canvas>
+                        <div class="card-body" style="height: 260px;">
+                            <canvas id="sleepChart"></canvas>
                         </div>
                     </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="card">
+
+                    <!-- 수면 정보 요약 -->
+                    <div class="card mb-3">
                         <div class="card-header">
-                            <h5><i class="fas fa-info-circle"></i> 수면 정보</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-info-circle"></i> 현재 수면 상태
+                            </h5>
                         </div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <label class="form-label">현재 수면 단계</label>
                                 <div class="progress">
-                                    <div class="progress-bar" id="sleepStageBar" role="progressbar" style="width: 0%"></div>
+                                    <div class="progress-bar" id="sleepStageBar" role="progressbar" style="width: 0%">
+                                    </div>
                                 </div>
                                 <small class="text-muted" id="sleepStageText">대기 중</small>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">움직임 레벨</label>
                                 <div class="progress">
-                                    <div class="progress-bar bg-warning" id="movementBar" role="progressbar" style="width: 0%"></div>
+                                    <div class="progress-bar bg-warning" id="movementBar" role="progressbar"
+                                        style="width: 0%"></div>
                                 </div>
                                 <small class="text-muted" id="movementText">0.0</small>
                             </div>
-                            
-                            <div class="mb-3">
+
+                            <div class="mb-0">
                                 <label class="form-label">수면 사이클 위치</label>
                                 <div class="progress">
-                                    <div class="progress-bar bg-info" id="cycleBar" role="progressbar" style="width: 0%"></div>
+                                    <div class="progress-bar bg-info" id="cycleBar" role="progressbar"
+                                        style="width: 0%"></div>
                                 </div>
                                 <small class="text-muted" id="cycleText">0%</small>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 디밍 제어 -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
+                <!-- 탭 3: 조명 / 디밍 제어 -->
+                <div class="tab-pane fade" id="tab-light" role="tabpanel" aria-labelledby="light-tab">
+                    <!-- 전구 전원 -->
+
+
+                    <!-- 디밍 패턴 수동 제어 -->
+                    <div class="card mb-3">
                         <div class="card-header">
-                            <h5><i class="fas fa-lightbulb"></i> 디밍 제어</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-wave-square"></i> 디밍 패턴
+                            </h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <h6>전구 전원</h6>
-                                    <div class="btn-group w-100" role="group">
-                                        <button type="button" class="btn btn-success" id="bulbOnBtn" disabled>
-                                            <i class="fas fa-power-off"></i> 켜기
-                                        </button>
-                                        <button type="button" class="btn btn-danger" id="bulbOffBtn" disabled>
-                                            <i class="fas fa-power-off"></i> 끄기
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <h6>디밍 패턴</h6>
-                                    <div class="mb-2">
-                                        <select class="form-select" id="patternSelect" disabled>
-                                            <option value="1">1. SMOOTH (부드러운 왕복)</option>
-                                            <option value="2">2. STEP (계단식)</option>
-                                            <option value="3">3. PULSE (펄스)</option>
-                                            <option value="4">4. SAW (톱니파)</option>
-                                        </select>
-                                    </div>
-                                    <div class="mb-2">
-                                        <label for="maxBrightInput" class="form-label">최대 밝기 (16-100)</label>
-                                        <input type="number" class="form-control" id="maxBrightInput" min="16" max="100" value="100" disabled>
-                                    </div>
-                                    <button class="btn btn-primary w-100" id="startPatternBtn" disabled>
-                                        <i class="fas fa-play"></i> 패턴 시작
-                                    </button>
-                                </div>
-                                <div class="col-md-4">
-                                    <h6>밝기 고정</h6>
-                                    <div class="mb-2">
-                                        <label for="brightnessSlider" class="form-label">밝기: <span id="brightnessValue">50</span>%</label>
-                                        <input type="range" class="form-range" id="brightnessSlider" min="16" max="100" value="50" disabled>
-                                    </div>
-                                    <button class="btn btn-warning w-100" id="setBrightnessBtn" disabled>
-                                        <i class="fas fa-adjust"></i> 밝기 설정
-                                    </button>
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label">패턴 선택</label>
+                                <!-- 🔴 기존 id="patternSelect" → 조명 탭은 별도 id 사용 -->
+                                <select class="form-select" id="patternSelectLight">
+                                    <option value="1">1. SMOOTH (부드러운 왕복)</option>
+                                    <option value="2">2. STEP (계단식)</option>
+                                    <option value="3">3. PULSE (펄스)</option>
+                                    <option value="4">4. SAW (톱니파)</option>
+                                </select>
                             </div>
+
+                            <div class="mb-3">
+                                <!-- 🔴 기존 id="maxBrightInput" → 조명 탭은 별도 id 사용 -->
+                                <label for="maxBrightInputLight" class="form-label">최대 밝기 (16-100)</label>
+                                <input type="number" class="form-control" id="maxBrightInputLight" min="16" max="100"
+                                    value="100">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="dimmingSpeedInput" class="form-label">
+                                    디밍 속도 (ms, 최소 200)
+                                </label>
+                                <input type="number" class="form-control" id="dimmingSpeedInput" min="200" value="4000">
+                                <small class="text-muted">
+                                    조명 패턴 한 사이클 시간(ms)입니다. 값이 클수록 더 천천히 변화합니다.
+                                </small>
+                            </div>
+
+
+
+                            <button class="btn btn-primary w-100" id="startPatternBtn">
+                                <i class="fas fa-play"></i> 패턴 시작
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <!-- 밝기 고정 -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-adjust"></i> 밝기 고정
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="brightnessSlider" class="form-label">
+                                    밝기: <span id="brightnessValue">50</span>%
+                                </label>
+                                <input type="range" class="form-range" id="brightnessSlider" min="16" max="100"
+                                    value="50" disabled>
+                            </div>
+                            <button class="btn btn-warning w-100" id="setBrightnessBtn" disabled>
+                                <i class="fas fa-check"></i> 밝기 설정
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 알람 로그 -->
-            <div class="row">
-                <div class="col-12">
+                <!-- 탭 4: 알람 로그 -->
+                <div class="tab-pane fade" id="tab-log" role="tabpanel" aria-labelledby="log-tab">
                     <div class="card">
                         <div class="card-header">
-                            <h5><i class="fas fa-history"></i> 알람 로그</h5>
+                            <h5 class="mb-0">
+                                <i class="fas fa-history"></i> 알람 & 시스템 로그
+                            </h5>
                         </div>
                         <div class="card-body">
                             <div id="alarmLog" class="log-container">
-                                <p class="text-muted">알람 로그가 여기에 표시됩니다.</p>
+                                <p class="text-muted mb-0">알람 로그가 여기에 표시됩니다.</p>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+
+            </div> <!-- tab-content 끝 -->
+        </div> <!-- container 끝 -->
+    </div> <!-- container-fluid 끝 -->
 
     <!-- 알림 모달 -->
     <div class="modal fade" id="alarmModal" tabindex="-1">
@@ -234,8 +350,10 @@
         </div>
     </div>
 
+    <!-- 스크립트 -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

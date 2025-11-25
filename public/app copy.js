@@ -24,7 +24,7 @@ class SleepAlarmApp {
                 yAxisID: 'y1'
             }]
         };
-
+        
         this.init();
     }
 
@@ -45,7 +45,6 @@ class SleepAlarmApp {
         document.getElementById('cancelAlarmBtn').addEventListener('click', () => {
             this.cancelAlarm();
         });
-        
 
         // 모니터링 시작 버튼
         document.getElementById('startMonitoringBtn').addEventListener('click', () => {
@@ -101,7 +100,7 @@ class SleepAlarmApp {
                         min: 0,
                         max: 2,
                         ticks: {
-                            callback: function (value) {
+                            callback: function(value) {
                                 const stages = ['깨어있음', '얕은잠', '깊은잠'];
                                 return stages[value] || value;
                             }
@@ -125,7 +124,7 @@ class SleepAlarmApp {
                     },
                     tooltip: {
                         callbacks: {
-                            label: function (context) {
+                            label: function(context) {
                                 if (context.datasetIndex === 0) {
                                     const stages = ['깨어있음', '얕은잠', '깊은잠'];
                                     return `수면 단계: ${stages[context.parsed.y] || context.parsed.y}`;
@@ -143,9 +142,9 @@ class SleepAlarmApp {
     connectWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
-
+        
         this.ws = new WebSocket(wsUrl);
-
+        
         this.ws.onopen = () => {
             this.updateConnectionStatus(true);
             this.addLog('WebSocket 연결됨', 'success');
@@ -163,7 +162,7 @@ class SleepAlarmApp {
         this.ws.onclose = () => {
             this.updateConnectionStatus(false);
             this.addLog('WebSocket 연결 끊어짐', 'warning');
-
+            
             // 5초 후 재연결 시도
             setTimeout(() => {
                 this.connectWebSocket();
@@ -196,7 +195,7 @@ class SleepAlarmApp {
     updateConnectionStatus(connected) {
         const statusElement = document.getElementById('connectionStatus');
         const icon = statusElement.querySelector('i');
-
+        
         if (connected) {
             icon.className = 'fas fa-circle text-success';
             statusElement.innerHTML = '<i class="fas fa-circle text-success"></i> 연결됨';
@@ -208,7 +207,7 @@ class SleepAlarmApp {
 
     updateDeviceStatus(devices) {
         const container = document.getElementById('deviceStatus');
-
+        
         if (devices.length === 0) {
             container.innerHTML = '<p class="text-muted">연결된 디바이스가 없습니다.</p>';
             this.updateButtonStates(false);
@@ -218,7 +217,7 @@ class SleepAlarmApp {
         let html = '';
         devices.forEach(device => {
             this.devices.set(device.deviceId, device);
-
+            
             if (!this.currentDeviceId) {
                 this.currentDeviceId = device.deviceId;
             }
@@ -226,7 +225,7 @@ class SleepAlarmApp {
             const statusClasses = [];
             if (device.isMonitoring) statusClasses.push('monitoring');
             if (device.alarmActive) statusClasses.push('alarm-active');
-
+            
             html += `
                 <div class="device-status-item">
                     <div>
@@ -263,15 +262,11 @@ class SleepAlarmApp {
             if (button) button.disabled = !deviceAvailable;
         });
 
-        // 🔴 여기 수정: 디밍 관련 인풋들 추가
+        // 디밍 제어 입력 필드 활성화/비활성화
         const dimmerInputs = [
-            'patternSelect',          // 알람 탭 패턴
-            'maxBrightInput',         // 알람 탭 최대 밝기
-            'dimmingSpeedInputAlarm', // 알람 탭 디밍 속도  ⬅️ 추가
-            'brightnessSlider',       // 밝기 슬라이더
-            'patternSelectLight',     // 조명 탭 패턴
-            'maxBrightInputLight',    // 조명 탭 최대 밝기
-            'dimmingSpeedInput'       // 조명 탭 디밍 속도 ⬅️ 추가
+            'patternSelect',
+            'maxBrightInput',
+            'brightnessSlider'
         ];
 
         dimmerInputs.forEach(inputId => {
@@ -280,13 +275,11 @@ class SleepAlarmApp {
         });
     }
 
-
-
     updateSleepData(data) {
         if (data.deviceId !== this.currentDeviceId) return;
 
         const analysis = data.analysis;
-
+        
         // 차트 데이터 업데이트
         const now = new Date().toLocaleTimeString();
         this.chartData.labels.push(now);
@@ -304,7 +297,7 @@ class SleepAlarmApp {
 
         // 수면 정보 업데이트
         this.updateSleepInfo(analysis);
-
+        
         // 모니터링 상태 업데이트
         document.getElementById('monitoringStatus').textContent = '모니터링 중';
         document.getElementById('monitoringStatus').className = 'text-success';
@@ -313,7 +306,7 @@ class SleepAlarmApp {
     updateSleepInfo(analysis) {
         const stages = ['깨어있음', '얕은잠', '깊은잠'];
         const stageColors = ['#dc3545', '#ffc107', '#198754'];
-
+        
         // 수면 단계 업데이트
         const stageBar = document.getElementById('sleepStageBar');
         const stageText = document.getElementById('sleepStageText');
@@ -334,74 +327,59 @@ class SleepAlarmApp {
         cycleText.textContent = `${(analysis.cyclePosition * 100).toFixed(1)}%`;
     }
 
-    async setAlarm() {
-        const wakeTimeInput = document.getElementById('wakeTime');
-        const wakeTime = wakeTimeInput.value;
-
-        if (!wakeTime) {
-            alert('기상 시간을 선택해주세요.');
-            return;
-        }
-
-        if (!this.currentDeviceId) {
-            alert('연결된 디바이스가 없습니다.');
-            return;
-        }
-
-        // 👉 디밍 관련 값 가져오기
-        const pattern = parseInt(document.getElementById('patternSelect').value) || 1;
-        const maxBright = parseInt(document.getElementById('maxBrightInput').value) || 100;
-
-        // 🔴 알람용 디밍 속도 입력 (최소 200ms)
-        const dimmingSpeedInputAlarm = document.getElementById('dimmingSpeedInputAlarm');
-        let intervalMs = parseInt(dimmingSpeedInputAlarm.value, 10);
-        if (isNaN(intervalMs)) intervalMs = 4000;
-
-        if (intervalMs < 200) {
-            alert('디밍 속도(ms)는 최소 200 이상이어야 합니다.');
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/alarm/set', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    targetWakeTime: new Date(wakeTime).getTime(),
-                    deviceId: this.currentDeviceId,
-                    pattern: pattern,
-                    maxBright: maxBright,
-                    intervalMs: intervalMs    // 🔴 서버로도 함께 전송
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.addLog(`알람 설정됨: ${new Date(wakeTime).toLocaleString()}`, 'success');
-                this.addLog(
-                    `알람 패턴: ${pattern}, 최대 밝기: ${maxBright}%, 디밍 속도: ${intervalMs}ms`,
-                    'info'
-                );
-
-                document.getElementById('setAlarmBtn').disabled = true;
-                document.getElementById('cancelAlarmBtn').disabled = false;
-
-                if (result.alarmCalculation) {
-                    const optimalTime = new Date(result.alarmCalculation.recommendedTime);
-                    this.addLog(`최적 알람 시간: ${optimalTime.toLocaleString()}`, 'info');
-                }
-            } else {
-                this.addLog(`알람 설정 실패: ${result.error}`, 'danger');
-            }
-        } catch (error) {
-            console.error('알람 설정 오류:', error);
-            this.addLog('알람 설정 중 오류 발생', 'danger');
-        }
+async setAlarm() {
+    const wakeTimeInput = document.getElementById('wakeTime');
+    const wakeTime = wakeTimeInput.value;
+    
+    if (!wakeTime) {
+        alert('기상 시간을 선택해주세요.');
+        return;
     }
 
+    if (!this.currentDeviceId) {
+        alert('연결된 디바이스가 없습니다.');
+        return;
+    }
+
+    // 👉 디밍 관련 값 가져오기
+    const pattern = parseInt(document.getElementById('patternSelect').value) || 1;
+    const maxBright = parseInt(document.getElementById('maxBrightInput').value) || 100;
+
+    try {
+        const response = await fetch('/api/alarm/set', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                targetWakeTime: new Date(wakeTime).getTime(),
+                deviceId: this.currentDeviceId,
+                pattern: pattern,
+                maxBright: maxBright
+            })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            this.addLog(`알람 설정됨: ${new Date(wakeTime).toLocaleString()}`, 'success');
+            this.addLog(`알람 패턴: ${pattern}, 최대 밝기: ${maxBright}%`, 'info');
+            
+            document.getElementById('setAlarmBtn').disabled = true;
+            document.getElementById('cancelAlarmBtn').disabled = false;
+
+            if (result.alarmCalculation) {
+                const optimalTime = new Date(result.alarmCalculation.recommendedTime);
+                this.addLog(`최적 알람 시간: ${optimalTime.toLocaleString()}`, 'info');
+            }
+        } else {
+            this.addLog(`알람 설정 실패: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('알람 설정 오류:', error);
+        this.addLog('알람 설정 중 오류 발생', 'danger');
+    }
+}
 
     async cancelAlarm() {
         if (!this.currentDeviceId) {
@@ -421,10 +399,10 @@ class SleepAlarmApp {
             });
 
             const result = await response.json();
-
+            
             if (result.success) {
                 this.addLog('알람이 취소되었습니다.', 'warning');
-
+                
                 // 버튼 상태 변경
                 document.getElementById('setAlarmBtn').disabled = false;
                 document.getElementById('cancelAlarmBtn').disabled = true;
@@ -439,10 +417,10 @@ class SleepAlarmApp {
 
     handleSleepDetected(data) {
         if (data.deviceId !== this.currentDeviceId) return;
-
+        
         const sleepInfo = data.sleepInfo;
         const alarmTime = new Date(sleepInfo.recommendedAlarmTime);
-
+        
         this.addLog(`수면 감지됨! 알람 시간: ${alarmTime.toLocaleString()}`, 'success');
         this.addLog(`90분 사이클 ${sleepInfo.cyclesToTarget}개 후 기상`, 'info');
     }
@@ -465,11 +443,11 @@ class SleepAlarmApp {
             });
 
             const result = await response.json();
-
+            
             if (result.success) {
                 this.addLog('수면 모니터링이 시작되었습니다.', 'success');
                 this.isMonitoring = true;
-
+                
                 // 버튼 상태 변경
                 document.getElementById('startMonitoringBtn').disabled = true;
                 document.getElementById('stopMonitoringBtn').disabled = false;
@@ -500,15 +478,15 @@ class SleepAlarmApp {
             });
 
             const result = await response.json();
-
+            
             if (result.success) {
                 this.addLog('수면 모니터링이 중지되었습니다.', 'warning');
                 this.isMonitoring = false;
-
+                
                 // 버튼 상태 변경
                 document.getElementById('startMonitoringBtn').disabled = false;
                 document.getElementById('stopMonitoringBtn').disabled = true;
-
+                
                 // 모니터링 상태 업데이트
                 document.getElementById('monitoringStatus').textContent = '대기 중';
                 document.getElementById('monitoringStatus').className = 'text-muted';
@@ -524,28 +502,28 @@ class SleepAlarmApp {
     calculateOptimalWakeTime() {
         const wakeTimeInput = document.getElementById('wakeTime');
         const wakeTime = wakeTimeInput.value;
-
+        
         if (!wakeTime) return;
 
         const targetTime = new Date(wakeTime).getTime();
         const now = Date.now();
         const timeToTarget = targetTime - now;
-
+        
         // 90분 사이클 계산
         const cycleDuration = 90 * 60 * 1000; // 90분
         const cyclesToTarget = Math.floor(timeToTarget / cycleDuration);
         const optimalTime = targetTime - (cyclesToTarget * cycleDuration);
-
+        
         this.addLog(`목표 시간까지 ${cyclesToTarget}개 사이클`, 'info');
     }
 
     handleAlarmTriggered(data) {
         this.addLog('알람이 발생했습니다!', 'danger');
-
+        
         // 모달 표시
         const modal = new bootstrap.Modal(document.getElementById('alarmModal'));
         modal.show();
-
+        
         // 사운드 재생 (브라우저 지원 시)
         this.playAlarmSound();
     }
@@ -555,13 +533,13 @@ class SleepAlarmApp {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-
+            
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-
+            
             oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
             gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-
+            
             oscillator.start();
             oscillator.stop(audioContext.currentTime + 0.5);
         } catch (error) {
@@ -573,21 +551,21 @@ class SleepAlarmApp {
         const logContainer = document.getElementById('alarmLog');
         const logEntry = document.createElement('div');
         logEntry.className = `log-entry ${type} fade-in`;
-
+        
         const timestamp = new Date().toLocaleTimeString();
         logEntry.innerHTML = `
             <div class="log-timestamp">${timestamp}</div>
             <div class="log-message">${message}</div>
         `;
-
+        
         // 첫 번째 로그 항목이 기본 메시지인 경우 제거
-        if (logContainer.children.length === 1 &&
+        if (logContainer.children.length === 1 && 
             logContainer.children[0].textContent.includes('알람 로그가 여기에 표시됩니다')) {
             logContainer.innerHTML = '';
         }
-
+        
         logContainer.insertBefore(logEntry, logContainer.firstChild);
-
+        
         // 최대 50개 로그 항목만 유지
         while (logContainer.children.length > 50) {
             logContainer.removeChild(logContainer.lastChild);
@@ -598,7 +576,7 @@ class SleepAlarmApp {
         try {
             const response = await fetch('/api/devices');
             const result = await response.json();
-
+            
             if (result.devices && result.devices.length > 0) {
                 this.updateDeviceStatus(result.devices);
             }
@@ -628,7 +606,7 @@ class SleepAlarmApp {
             });
 
             const result = await response.json();
-
+            
             if (result.success) {
                 this.addLog(`전구 전원: ${on ? 'ON' : 'OFF'}`, on ? 'success' : 'warning');
             } else {
@@ -646,43 +624,32 @@ class SleepAlarmApp {
             return;
         }
 
-        const pattern = parseInt(document.getElementById('patternSelectLight').value);
-        const maxBright = parseInt(document.getElementById('maxBrightInputLight').value);
-        let intervalMs = parseInt(document.getElementById('dimmingSpeedInput').value, 10);
+        const pattern = parseInt(document.getElementById('patternSelect').value);
+        const maxBright = parseInt(document.getElementById('maxBrightInput').value);
 
         if (maxBright < 16 || maxBright > 100) {
             alert('최대 밝기는 16-100 사이의 값이어야 합니다.');
             return;
         }
 
-        if (isNaN(intervalMs)) intervalMs = 4000;
-
-        // 🔴 최소 200ms 체크
-        if (intervalMs < 200) {
-            alert('디밍 속도(ms)는 최소 200 이상이어야 합니다.');
-            return;
-        }
-
         try {
             const response = await fetch('/api/dimmer/pattern', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     deviceId: this.currentDeviceId,
                     pattern: pattern,
-                    maxBright: maxBright,
-                    intervalMs: intervalMs
+                    maxBright: maxBright
                 })
             });
 
             const result = await response.json();
-
+            
             if (result.success) {
                 const patternNames = ['', 'SMOOTH', 'STEP', 'PULSE', 'SAW'];
-                this.addLog(
-                    `디밍 패턴 시작: ${patternNames[pattern]}, 최대 밝기: ${maxBright}%, 디밍 속도: ${intervalMs}ms`,
-                    'success'
-                );
+                this.addLog(`디밍 패턴 시작: ${patternNames[pattern]}, 최대 밝기: ${maxBright}%`, 'success');
             } else {
                 this.addLog(`디밍 패턴 시작 실패: ${result.error}`, 'danger');
             }
@@ -691,8 +658,6 @@ class SleepAlarmApp {
             this.addLog('디밍 패턴 시작 중 오류 발생', 'danger');
         }
     }
-
-
 
     async setBrightness() {
         if (!this.currentDeviceId) {
@@ -720,7 +685,7 @@ class SleepAlarmApp {
             });
 
             const result = await response.json();
-
+            
             if (result.success) {
                 this.addLog(`밝기 설정: ${level}%`, 'success');
             } else {

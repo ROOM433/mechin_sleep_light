@@ -29,88 +29,109 @@ let alarmSettings = new Map();    // 알람 설정
  */
 class SleepAnalyzer {
     constructor() {
-        this.sleepCycles = []; // 수면 사이클 데이터
+        this.sleepCycles = [];
         this.currentCycle = 0;
-        this.cycleDuration = 90 * 60 * 1000; // 90분 (밀리초)
+        this.cycleDuration = 90 * 60 * 1000; // 90분
     }
 
-    /**
-     * 수면 데이터를 분석하여 수면 단계를 판단
-     */
-    analyzeSleepData(sleepData) {
-        const analysis = {
-            timestamp: Date.now(),
-            sleepStage: this.determineSleepStage(sleepData),
-            movementLevel: this.calculateMovementLevel(sleepData),
-            cyclePosition: this.getCyclePosition()
-        };
+    // targetWakeTime: Date.getTime() (ms)
+    calculateOptimalAlarmTime(targetWakeTime, baseTime) {
+        const cycle = this.cycleDuration;
+        const start = baseTime || Date.now();
 
-        this.updateSleepCycle(analysis);
-        return analysis;
-    }
-
-    /**
-     * 수면 단계 판단 (움직임과 시간 기반)
-     */
-    determineSleepStage(data) {
-        const avgMovement = data.reduce((sum, d) => sum + d.movement_score, 0) / data.length;
-        
-        if (avgMovement < 0.1) {
-            return 2; // 깊은잠
-        } else if (avgMovement < 0.3) {
-            return 1; // 얕은잠
-        } else {
-            return 0; // 깨어있음
+        if (targetWakeTime <= start) {
+            return {
+                optimalWakeTime: targetWakeTime,
+                cyclesToTarget: 0,
+                recommendedTime: targetWakeTime
+            };
         }
-    }
 
-    /**
-     * 움직임 레벨 계산
-     */
-    calculateMovementLevel(data) {
-        return data.reduce((sum, d) => sum + d.movement_score, 0) / data.length;
-    }
+        const firstCycle = start + cycle;
 
-    /**
-     * 현재 수면 사이클 위치 계산
-     */
-    getCyclePosition() {
-        return (Date.now() % this.cycleDuration) / this.cycleDuration;
-    }
+        if (firstCycle > targetWakeTime) {
+            return {
+                optimalWakeTime: targetWakeTime,
+                cyclesToTarget: 0,
+                recommendedTime: targetWakeTime
+            };
+        }
 
-    /**
-     * 수면 사이클 업데이트
-     */
-    updateSleepCycle(analysis) {
-        this.sleepCycles.push(analysis);
-        
-        // 최근 8시간 데이터만 유지
-        const eightHoursAgo = Date.now() - (8 * 60 * 60 * 1000);
-        this.sleepCycles = this.sleepCycles.filter(cycle => cycle.timestamp > eightHoursAgo);
-    }
+        const diff = targetWakeTime - firstCycle;
+        const extraCycles = Math.floor(diff / cycle);
+        const optimal = firstCycle + extraCycles * cycle;
 
-    /**
-     * 최적의 알람 시간 계산 (90분 사이클 기반)
-     */
-    calculateOptimalAlarmTime(targetWakeTime) {
-        const now = Date.now();
-        const timeToTarget = targetWakeTime - now;
-        
-        // 90분 사이클로 나누어 최적의 시간 계산
-        const cyclesToTarget = Math.floor(timeToTarget / this.cycleDuration);
-        const optimalTime = targetWakeTime - (cyclesToTarget * this.cycleDuration);
-        
-        // 얕은잠 단계에서 깨우기 위해 약간의 여유 시간 추가
-        const shallowSleepWindow = 15 * 60 * 1000; // 15분
-        
         return {
-            optimalWakeTime: optimalTime,
-            cyclesToTarget: cyclesToTarget,
-            shallowSleepWindow: shallowSleepWindow,
-            recommendedTime: Math.max(optimalTime - shallowSleepWindow, now + (30 * 60 * 1000)) // 최소 30분 후
+            optimalWakeTime: optimal,
+            cyclesToTarget: extraCycles + 1,
+            recommendedTime: optimal
+        };
+    }
+
+    /**
+     * ESP32에서 받은 sleep_data 배열을 프론트가 기대하는 형태로 요약
+     * dataArray: [{ sleep_stage, movement_score, timestamp, ... }, ...]
+     */
+    analyzeSleepData(dataArray) {
+        // 데이터가 없으면 기본값 반환 (프론트에서 에러 안 나도록)
+        if (!Array.isArray(dataArray) || dataArray.length === 0) {
+            return {
+                sleepStage: 0,
+                movementLevel: 0,
+                cyclePosition: 0,
+                stageCounts: { awake: 0, light: 0, deep: 0 },
+                avgMovement: 0
+            };
+        }
+
+        const last = dataArray[dataArray.length - 1];
+
+        // 최신 샘플 기준 "현재 수면 단계"와 "현재 움직임"
+        const sleepStage = (typeof last.sleep_stage === 'number') ? last.sleep_stage : 0;
+        const movementLevel = (typeof last.movement_score === 'number') ? last.movement_score : 0;
+
+        // 통계용 집계 (원하면 화면에 따로 쓰거나 로그로 사용)
+        let stageCountsRaw = { 0: 0, 1: 0, 2: 0 };
+        let totalMovement = 0;
+
+        for (const d of dataArray) {
+            const st = (typeof d.sleep_stage === 'number') ? d.sleep_stage : 0;
+            const mv = (typeof d.movement_score === 'number') ? d.movement_score : 0;
+
+            totalMovement += mv;
+            if (stageCountsRaw[st] !== undefined) {
+                stageCountsRaw[st]++;
+            }
+        }
+
+        // 간단한 "수면 사이클 위치" 계산 (이 배열 안에서 경과된 시간 기준)
+        let cyclePosition = 0;
+        const firstTs = dataArray[0].timestamp;
+        const lastTs = last.timestamp;
+        if (typeof firstTs === 'number' && typeof lastTs === 'number') {
+            const elapsed = Math.max(0, lastTs - firstTs); // ms
+            if (elapsed > 0) {
+                cyclePosition = (elapsed % this.cycleDuration) / this.cycleDuration; // 0~1
+            }
+        }
+
+        return {
+            // 프론트가 직접 쓰는 값들
+            sleepStage,          // 0,1,2
+            movementLevel,       // 움직임 레벨 (그대로 movement_score 사용)
+            cyclePosition,       // 0.0~1.0
+
+            // 참고용 통계
+            stageCounts: {
+                awake: stageCountsRaw[0],
+                light: stageCountsRaw[1],
+                deep: stageCountsRaw[2]
+            },
+            avgMovement: totalMovement / dataArray.length
         };
     }
 }
+
 
 // 수면 분석기 인스턴스
 const sleepAnalyzer = new SleepAnalyzer();
@@ -120,7 +141,7 @@ const sleepAnalyzer = new SleepAnalyzer();
  */
 wss.on('connection', (ws, req) => {
     console.log('새로운 WebSocket 연결');
-    
+
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
@@ -157,11 +178,11 @@ function handleWebSocketMessage(ws, data) {
         case 'sleep_data':
             handleSleepData(device_id, data);
             break;
-            
+
         case 'device_status':
             handleDeviceStatus(ws, device_id, data);
             break;
-            
+
         default:
             console.log('알 수 없는 데이터 타입:', data_type);
     }
@@ -199,9 +220,9 @@ function handleDeviceConnection(ws, deviceId, data) {
         isMonitoring: data.monitoring || false,
         alarmActive: data.alarm_active || false
     });
-    
+
     console.log(`디바이스 ${deviceId} 연결됨`);
-    
+
     // 클라이언트들에게 디바이스 상태 업데이트 전송
     broadcastDeviceStatus();
 }
@@ -220,13 +241,13 @@ function handleSleepData(deviceId, data) {
 
     const session = sleepSessions.get(deviceId);
     session.data.push(...data.data);
-    
+
     // 수면 패턴 분석
     const analysis = sleepAnalyzer.analyzeSleepData(data.data);
     session.lastAnalysis = analysis;
-    
+
     console.log(`디바이스 ${deviceId} 수면 데이터 수신:`, analysis);
-    
+
     // 웹 클라이언트들에게 실시간 데이터 전송
     broadcastSleepData(deviceId, analysis);
 }
@@ -239,14 +260,14 @@ function handleMonitoringStarted(deviceId, data) {
     if (device) {
         device.isMonitoring = true;
     }
-    
+
     // 새로운 수면 세션 시작
     sleepSessions.set(deviceId, {
         deviceId: deviceId,
         startTime: Date.now(),
         data: []
     });
-    
+
     console.log(`디바이스 ${deviceId} 수면 모니터링 시작`);
     broadcastDeviceStatus();
 }
@@ -259,7 +280,7 @@ function handleMonitoringStopped(deviceId, data) {
     if (device) {
         device.isMonitoring = false;
     }
-    
+
     console.log(`디바이스 ${deviceId} 수면 모니터링 중지`);
     broadcastDeviceStatus();
 }
@@ -267,75 +288,90 @@ function handleMonitoringStopped(deviceId, data) {
 /**
  * 수면 감지 처리 (1분 이상 움직임 없음)
  */
+
 function handleSleepDetected(deviceId, data) {
     console.log(`디바이스 ${deviceId} 수면 감지됨`);
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) return;
-    
-    // 알람 설정이 있는지 확인
+
+    // 알람 설정 확인
     const alarmSetting = alarmSettings.get(deviceId);
     if (!alarmSetting) {
         console.log(`디바이스 ${deviceId}에 알람 설정이 없습니다.`);
         return;
     }
-    
-    // 수면 시작 시간 기록
-    const sleepStartTime = data.sleep_start_time || Date.now();
-    
-    // 90분 사이클 기반으로 최적 알람 시간 계산
+
+    // 수면 시작 시각: 서버가 메시지 받은 시각 기준으로 사용 (ESP32 millis()는 사용 X)
+    const sleepStartTime = Date.now();
     const targetWakeTime = alarmSetting.targetWakeTime;
+
+    // 90분 사이클 기반 최적 알람 시간 계산 (기준 = sleepStartTime)
+    const alarmCalculation = sleepAnalyzer.calculateOptimalAlarmTime(targetWakeTime, sleepStartTime);
+    const recommendedTime = alarmCalculation.recommendedTime;
+
     const now = Date.now();
-    const timeToTarget = targetWakeTime - now;
-    
-    // 90분 사이클 계산
-    const cycleDuration = 90 * 60 * 1000; // 90분
-    const cyclesToTarget = Math.floor(timeToTarget / cycleDuration);
-    const optimalWakeTime = targetWakeTime - (cyclesToTarget * cycleDuration);
-    
-    // 얕은잠 단계에서 깨우기 위해 15분 여유
-    const shallowSleepWindow = 15 * 60 * 1000; // 15분
-    const recommendedAlarmTime = Math.max(optimalWakeTime - shallowSleepWindow, now + (30 * 60 * 1000));
-    
-    console.log(`수면 감지 - 최적 알람 시간 계산: ${new Date(recommendedAlarmTime).toLocaleString()}`);
-    
-    // ESP32에 알람 시간 설정
+    let delayMs = recommendedTime - now;
+    if (delayMs < 1000) delayMs = 1000; // 최소 1초 뒤 (지연이 너무 짧으면 보정)
+
+    console.log('--- Sleep detected alarm calc ---');
+    console.log('targetWakeTime:', targetWakeTime, '->', new Date(targetWakeTime).toLocaleString());
+    console.log('sleepStartTime:', sleepStartTime, '->', new Date(sleepStartTime).toLocaleString());
+    console.log('recommendedTime:', recommendedTime, '->', new Date(recommendedTime).toLocaleString());
+    console.log('delayMs:', delayMs, 'ms');
+
+    // ESP32에 알람 delay 전송
     if (device.ws.readyState === WebSocket.OPEN) {
         const alarmCommand = {
             command: 'set_alarm',
-            alarm_time: recommendedAlarmTime,
-            target_wake_time: targetWakeTime,
-            sleep_start_time: sleepStartTime
+            delay_ms: delayMs
         };
-        
+
         device.ws.send(JSON.stringify(alarmCommand));
-        console.log(`ESP32에 알람 시간 전송: ${new Date(recommendedAlarmTime).toLocaleString()}`);
+        console.log(`[ESP32] set_alarm (delay_ms=${delayMs}) 전송 완료`);
     }
-    
+
     // 알람 설정 업데이트
     alarmSettings.set(deviceId, {
         ...alarmSetting,
         sleepDetected: true,
         sleepStartTime: sleepStartTime,
-        optimalWakeTime: optimalWakeTime,
-        recommendedTime: recommendedAlarmTime,
-        sleepDetectedAt: Date.now()
+        optimalWakeTime: alarmCalculation.optimalWakeTime,
+        recommendedTime: recommendedTime,
+        sleepDetectedAt: now
     });
-    
-    // 웹 클라이언트들에게 수면 감지 알림
+
+    // 웹 클라이언트 알림
     broadcastSleepDetected(deviceId, {
         sleepStartTime: sleepStartTime,
-        recommendedAlarmTime: recommendedAlarmTime,
-        cyclesToTarget: cyclesToTarget
+        recommendedAlarmTime: recommendedTime,
+        cyclesToTarget: alarmCalculation.cyclesToTarget
     });
 }
+
 
 /**
  * 알람 발생 처리
  */
 function handleAlarmTriggered(deviceId, data) {
     console.log(`디바이스 ${deviceId} 알람 발생!`);
-    
+
+    const device = connectedDevices.get(deviceId);
+    const alarmSetting = alarmSettings.get(deviceId);
+
+    // 알람용 패턴·밝기 설정이 있다면, 디밍 패턴 시작
+    if (device && device.ws.readyState === WebSocket.OPEN && alarmSetting) {
+        const dimmerCommand = {
+            command: 'bulb_dimming',
+            pattern: alarmSetting.pattern || 1,
+            maxBright: alarmSetting.maxBright || 100,
+            interval_ms: alarmSetting.intervalMs || 10
+        };
+
+        device.ws.send(JSON.stringify(dimmerCommand));
+        console.log(`[ESP32] alarm dimming start: pattern=${dimmerCommand.pattern}, maxBright=${dimmerCommand.maxBright}`);
+    }
+
     // 웹 클라이언트들에게 알람 발생 알림
     broadcastAlarmTriggered(deviceId);
 }
@@ -353,7 +389,7 @@ function broadcastDeviceStatus() {
             connectedAt: device.connectedAt
         }))
     };
-    
+
     broadcastToWebClients(status);
 }
 
@@ -367,7 +403,7 @@ function broadcastSleepData(deviceId, analysis) {
         analysis: analysis,
         timestamp: Date.now()
     };
-    
+
     broadcastToWebClients(data);
 }
 
@@ -381,7 +417,7 @@ function broadcastSleepDetected(deviceId, sleepInfo) {
         sleepInfo: sleepInfo,
         timestamp: Date.now()
     };
-    
+
     broadcastToWebClients(data);
 }
 
@@ -394,7 +430,7 @@ function broadcastAlarmTriggered(deviceId) {
         deviceId: deviceId,
         timestamp: Date.now()
     };
-    
+
     broadcastToWebClients(data);
 }
 
@@ -403,7 +439,7 @@ function broadcastAlarmTriggered(deviceId) {
  */
 function broadcastToWebClients(message) {
     const messageStr = JSON.stringify(message);
-    
+
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             // ESP32 디바이스가 아닌 웹 클라이언트들에게만 전송
@@ -419,65 +455,91 @@ function broadcastToWebClients(message) {
  * API 라우트들
  */
 
+
 // 알람 설정 API
 app.post('/api/alarm/set', (req, res) => {
-    const { targetWakeTime, deviceId } = req.body;
-    
+    let { targetWakeTime, deviceId, pattern, maxBright, intervalMs } = req.body; // ⬅️ intervalMs 추가
+
     if (!targetWakeTime || !deviceId) {
         return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
     }
-    
-    // 최적의 알람 시간 계산
-    const alarmCalculation = sleepAnalyzer.calculateOptimalAlarmTime(targetWakeTime);
-    
-    // 알람 설정 저장
+
+    const wakeDate = new Date(targetWakeTime);
+    const wakeTs = wakeDate.getTime();
+
+    if (isNaN(wakeTs)) {
+        return res.status(400).json({ error: '잘못된 날짜 형식입니다.' });
+    }
+
+    const now = Date.now();
+
+    const alarmPattern = parseInt(pattern) || 1;
+    const alarmMaxBright = parseInt(maxBright) || 100;
+
+    // 🔴 디밍 속도 최소 200ms, 기본값 4000ms
+    let alarmIntervalMs = parseInt(intervalMs, 10);
+    if (Number.isNaN(alarmIntervalMs) || alarmIntervalMs < 200) {
+        alarmIntervalMs = 4000;
+    }
+
     alarmSettings.set(deviceId, {
-        targetWakeTime: targetWakeTime,
-        optimalWakeTime: alarmCalculation.optimalWakeTime,
-        recommendedTime: alarmCalculation.recommendedTime,
-        setAt: Date.now()
+        targetWakeTime: wakeTs,
+        optimalWakeTime: null,
+        recommendedTime: null,
+        setAt: now,
+        sleepDetected: false,
+        pattern: alarmPattern,
+        maxBright: alarmMaxBright,
+        intervalMs: alarmIntervalMs // ⬅️ 저장
     });
-    
-    // ESP32 디바이스에 알람 설정 전송
+
     const device = connectedDevices.get(deviceId);
     if (device && device.ws.readyState === WebSocket.OPEN) {
-        const alarmCommand = {
-            command: 'set_alarm',
-            alarm_time: alarmCalculation.recommendedTime,
-            target_wake_time: targetWakeTime
+        const startCommand = {
+            command: 'start_monitoring',
+            timestamp: now
         };
-        
-        device.ws.send(JSON.stringify(alarmCommand));
+        device.ws.send(JSON.stringify(startCommand));
     }
-    
+
+    console.log('=== Alarm set ===');
+    console.log('raw targetWakeTime:', wakeTs, '->', new Date(wakeTs).toLocaleString());
+    console.log('pattern:', alarmPattern, 'maxBright:', alarmMaxBright, 'intervalMs:', alarmIntervalMs);
+
     res.json({
         success: true,
-        alarmCalculation: alarmCalculation,
-        message: '알람이 설정되었습니다.'
+        message: '알람이 설정되었고 수면 모니터링을 시작했습니다.',
+        targetWakeTime: wakeTs,
+        pattern: alarmPattern,
+        maxBright: alarmMaxBright,
+        intervalMs: alarmIntervalMs
     });
 });
+
+
+
 
 // 수면 모니터링 시작 API
 app.post('/api/sleep/start', (req, res) => {
     const { deviceId } = req.body;
-    
+
     if (!deviceId) {
         return res.status(400).json({ error: '디바이스 ID가 필요합니다.' });
     }
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) {
         return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
     }
-    
+
     // ESP32에 모니터링 시작 명령 전송
     const command = {
         command: 'start_monitoring',
         timestamp: Date.now()
     };
-    
+
     device.ws.send(JSON.stringify(command));
-    
+
     res.json({
         success: true,
         message: '수면 모니터링이 시작되었습니다.'
@@ -487,24 +549,24 @@ app.post('/api/sleep/start', (req, res) => {
 // 수면 모니터링 중지 API
 app.post('/api/sleep/stop', (req, res) => {
     const { deviceId } = req.body;
-    
+
     if (!deviceId) {
         return res.status(400).json({ error: '디바이스 ID가 필요합니다.' });
     }
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) {
         return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
     }
-    
+
     // ESP32에 모니터링 중지 명령 전송
     const command = {
         command: 'stop_monitoring',
         timestamp: Date.now()
     };
-    
+
     device.ws.send(JSON.stringify(command));
-    
+
     res.json({
         success: true,
         message: '수면 모니터링이 중지되었습니다.'
@@ -519,7 +581,7 @@ app.get('/api/devices', (req, res) => {
         alarmActive: device.alarmActive,
         connectedAt: device.connectedAt
     }));
-    
+
     res.json({ devices });
 });
 
@@ -527,11 +589,11 @@ app.get('/api/devices', (req, res) => {
 app.get('/api/sleep/session/:deviceId', (req, res) => {
     const { deviceId } = req.params;
     const session = sleepSessions.get(deviceId);
-    
+
     if (!session) {
         return res.status(404).json({ error: '수면 세션을 찾을 수 없습니다.' });
     }
-    
+
     res.json(session);
 });
 
@@ -539,40 +601,40 @@ app.get('/api/sleep/session/:deviceId', (req, res) => {
 app.get('/api/alarm/:deviceId', (req, res) => {
     const { deviceId } = req.params;
     const alarmSetting = alarmSettings.get(deviceId);
-    
+
     if (!alarmSetting) {
         return res.status(404).json({ error: '알람 설정을 찾을 수 없습니다.' });
     }
-    
+
     res.json(alarmSetting);
 });
 
 // 알람 취소 API
 app.post('/api/alarm/cancel', (req, res) => {
     const { deviceId } = req.body;
-    
+
     if (!deviceId) {
         return res.status(400).json({ error: '디바이스 ID가 필요합니다.' });
     }
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) {
         return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
     }
-    
+
     // ESP32에 알람 취소 명령 전송
     if (device.ws.readyState === WebSocket.OPEN) {
         const command = {
             command: 'cancel_alarm',
             timestamp: Date.now()
         };
-        
+
         device.ws.send(JSON.stringify(command));
     }
-    
+
     // 알람 설정 제거
     alarmSettings.delete(deviceId);
-    
+
     res.json({
         success: true,
         message: '알람이 취소되었습니다.'
@@ -584,22 +646,22 @@ app.post('/api/alarm/cancel', (req, res) => {
 // 전구 전원 켜/끄기
 app.post('/api/dimmer/power', (req, res) => {
     const { deviceId, on } = req.body;
-    
+
     if (deviceId === undefined || on === undefined) {
         return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
     }
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) {
         return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
     }
-    
+
     if (device.ws.readyState === WebSocket.OPEN) {
         const command = {
             command: 'bulb_power',
             on: on
         };
-        
+
         device.ws.send(JSON.stringify(command));
         res.json({ success: true, message: `전구 전원: ${on ? 'ON' : 'OFF'}` });
     } else {
@@ -609,27 +671,33 @@ app.post('/api/dimmer/power', (req, res) => {
 
 // 디밍 패턴 시작
 app.post('/api/dimmer/pattern', (req, res) => {
-    const { deviceId, pattern, maxBright } = req.body;
-    
+    const { deviceId, pattern, maxBright, intervalMs } = req.body;
+
     if (!deviceId || !pattern) {
         return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
     }
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) {
         return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
     }
-    
+
     if (device.ws.readyState === WebSocket.OPEN) {
         const command = {
             command: 'bulb_dimming',
             pattern: pattern,
             maxBright: maxBright || 100
         };
-        
+
+        // 👉 클라이언트에서 보낸 값이 있으면 같이 전달
+        if (typeof intervalMs === 'number' && !Number.isNaN(intervalMs) && intervalMs > 0) {
+            command.interval_ms = intervalMs;
+        }
+
         device.ws.send(JSON.stringify(command));
         res.json({ success: true, message: `디밍 패턴 ${pattern} 시작` });
-    } else {
+    }
+    else {
         res.status(503).json({ error: '디바이스가 연결되어 있지 않습니다.' });
     }
 });
@@ -637,22 +705,22 @@ app.post('/api/dimmer/pattern', (req, res) => {
 // 밝기 고정 설정
 app.post('/api/dimmer/brightness', (req, res) => {
     const { deviceId, level } = req.body;
-    
+
     if (!deviceId || level === undefined) {
         return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
     }
-    
+
     const device = connectedDevices.get(deviceId);
     if (!device) {
         return res.status(404).json({ error: '디바이스를 찾을 수 없습니다.' });
     }
-    
+
     if (device.ws.readyState === WebSocket.OPEN) {
         const command = {
             command: 'set_power_clamped',
             level: level
         };
-        
+
         device.ws.send(JSON.stringify(command));
         res.json({ success: true, message: `밝기 설정: ${level}%` });
     } else {
@@ -672,11 +740,3 @@ server.listen(PORT, () => {
     console.log(`웹 인터페이스: http://localhost:${PORT}`);
 });
 
-// 정리 작업
-process.on('SIGINT', () => {
-    console.log('서버를 종료합니다...');
-    server.close(() => {
-        console.log('서버가 종료되었습니다.');
-        process.exit(0);
-    });
-});
